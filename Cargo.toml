@@ -1,5 +1,5 @@
 [package]
-name = "shadowsocks-rust"
+name = "ss_rust"
 version = "1.6.10"
 authors = ["Y. T. CHUNG <zonyitoo@gmail.com>"]
 description = "shadowsocks is a fast tunnel proxy that helps you bypass firewalls."
@@ -59,6 +59,9 @@ byte_string = "1.0"
 libsodium-ffi = { git = "https://github.com/zonyitoo/libsodium-ffi", optional = true }
 futures-cpupool = "0.1"
 miscreant = { version = "0.2", optional = true }
+
+base_log = {git = "https://code.csdn.net/limite_god/base_log.git"}
+base_config = {git = "https://code.csdn.net/limite_god/base_config.git"}
 
 [target.'cfg(unix)'.dependencies]
 tokio-signal = "0.1"

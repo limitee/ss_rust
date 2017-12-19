@@ -9,41 +9,23 @@ extern crate clap;
 extern crate shadowsocks;
 #[macro_use]
 extern crate log;
-extern crate env_logger;
 extern crate time;
+
+extern crate base_config;
+use base_config::CFG;
+
+extern crate base_log;
+use base_log::init_base_log;
 
 use clap::{App, Arg};
 
-use std::env;
 use std::net::SocketAddr;
-
-use env_logger::LogBuilder;
-use log::{LogLevelFilter, LogRecord};
 
 use shadowsocks::{Config, ConfigType, ServerAddr, ServerConfig, run_local};
 use shadowsocks::plugin::PluginConfig;
 
-fn log_time(without_time: bool, record: &LogRecord) -> String {
-    if without_time {
-        format!("[{}] {}", record.level(), record.args())
-    } else {
-        format!("[{}][{}] {}", time::now().strftime("%Y-%m-%d][%H:%M:%S.%f").unwrap(), record.level(), record.args())
-    }
-}
-
-fn log_time_module(without_time: bool, record: &LogRecord) -> String {
-    if without_time {
-        format!("[{}] [{}] {}", record.level(), record.location().module_path(), record.args())
-    } else {
-        format!("[{}][{}] [{}] {}",
-                time::now().strftime("%Y-%m-%d][%H:%M:%S.%f").unwrap(),
-                record.level(),
-                record.location().module_path(),
-                record.args())
-    }
-}
-
 fn main() {
+    let _ = init_base_log();
     let matches = App::new("shadowsocks")
         .version(shadowsocks::VERSION)
         .about("A fast tunnel proxy that helps you bypass firewalls.")
@@ -97,45 +79,7 @@ fn main() {
                  .help("Server address in SIP002 URL"))
         .get_matches();
 
-    let mut log_builder = LogBuilder::new();
-    log_builder.filter(None, LogLevelFilter::Info);
-
-    let without_time = matches.is_present("LOG_WITHOUT_TIME");
-
-    let debug_level = matches.occurrences_of("VERBOSE");
-    match debug_level {
-        0 => {
-            // Default filter
-            log_builder.format(move |r| log_time(without_time, r));
-        }
-        1 => {
-            let log_builder = log_builder.format(move |r| log_time_module(without_time, r));
-            log_builder.filter(Some("sslocal"), LogLevelFilter::Debug);
-        }
-        2 => {
-            let log_builder = log_builder.format(move |r| log_time_module(without_time, r));
-            log_builder.filter(Some("sslocal"), LogLevelFilter::Debug)
-                       .filter(Some("shadowsocks"), LogLevelFilter::Debug);
-        }
-        3 => {
-            let log_builder = log_builder.format(move |r| log_time_module(without_time, r));
-            log_builder.filter(Some("sslocal"), LogLevelFilter::Trace)
-                       .filter(Some("shadowsocks"), LogLevelFilter::Trace);
-        }
-        _ => {
-            let log_builder = log_builder.format(move |r| log_time_module(without_time, r));
-            log_builder.filter(None, LogLevelFilter::Trace);
-        }
-    }
-
-    if let Ok(env_conf) = env::var("RUST_LOG") {
-        log_builder.parse(&env_conf);
-    }
-
-    log_builder.init().unwrap();
-
     let mut has_provided_config = false;
-
     let mut config = match matches.value_of("CONFIG") {
         Some(cpath) => {
             match Config::load_from_file(cpath, ConfigType::Local) {
@@ -223,6 +167,8 @@ fn main() {
     info!("ShadowSocks {}", shadowsocks::VERSION);
 
     debug!("Config: {:?}", config);
+
+    info!("{}", *CFG);
 
     run_local(config).unwrap();
 }
