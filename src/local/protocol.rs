@@ -13,7 +13,69 @@ use byteorder::{BigEndian, ReadBytesExt};
 extern crate bytes;
 use bytes::{BytesMut, BufMut};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
+struct Ip {
+    first: u8,
+    second: u8,
+    third: u8,
+    forth: u8,
+}
+
+impl Ip {
+    
+    pub fn new(fs:u8, s:u8, t:u8, f:u8) -> Self {
+        Ip {
+            first:fs,
+            second:s,
+            third:t,
+            forth:f,
+        }
+    }
+}
+
+#[derive(Default, Debug)]
+struct ConnectHead {
+    version: u8,
+    cmd: u8,
+    rsv: u8,
+    atyp: u8,
+    ip: Ip,
+    url: String,
+    port: u16,
+}
+
+impl ConnectHead {
+
+    pub fn set_version(&mut self, version:u8) {
+        self.version = version;
+    }
+
+    pub fn set_cmd(&mut self, cmd:u8) {
+        self.cmd = cmd;
+    }
+
+    pub fn set_rsv(&mut self, rsv:u8) {
+        self.rsv = rsv;
+    }
+
+    pub fn set_atyp(&mut self, atyp:u8) {
+        self.atyp = atyp;
+    }
+
+    pub fn set_port(&mut self, port:u16) {
+        self.port = port;
+    }
+    
+    pub fn set_ip(&mut self, ip:Ip) {
+        self.ip = ip;
+    }
+
+    pub fn set_url(&mut self, url:&str) {
+        self.url = url.to_string();
+    }
+}
+
+#[derive(Default, Debug)]
 struct StartHead {
     version: u8,
     method: u8,
@@ -98,7 +160,65 @@ impl Protocol {
     }
 
     pub fn connect(&mut self) -> Result<(), ErrCode> {
-        info!("now is the connect step...");
+        if self.buf.len() < 4 {
+            return Ok(());
+        }
+        let version;
+        let cmd;
+        let rsv;
+        let atyp;
+        let mut head:ConnectHead = Default::default();
+        {
+            {
+                let mut cur = Cursor::new(&self.buf[0..4]);
+                version = cur.read_u8().or(Err(SocketErr))?;
+                cmd = cur.read_u8().or(Err(SocketErr))?;
+                rsv = cur.read_u8().or(Err(SocketErr))?;
+                atyp = cur.read_u8().or(Err(SocketErr))?;
+
+                head.set_version(version);
+                head.set_cmd(cmd);
+                head.set_rsv(rsv);
+                head.set_atyp(atyp);
+            }
+            match atyp {
+                1 => {
+                    if self.buf.len() < 10 {
+                        return Ok(());
+                    }
+                    let _ = self.buf.split_to(4);
+                    let ip_buf = self.buf.split_to(4);
+                    let mut ip_cur = Cursor::new(&ip_buf);
+                    let fs = ip_cur.read_u8().or(Err(SocketErr))?;
+                    let s = ip_cur.read_u8().or(Err(SocketErr))?;
+                    let t = ip_cur.read_u8().or(Err(SocketErr))?;
+                    let f = ip_cur.read_u8().or(Err(SocketErr))?;
+                    let ip = Ip::new(fs, s, t, f);
+                    head.set_ip(ip);
+                },
+                3 => {
+                    if self.buf.len() < 5 {
+                        return Ok(());
+                    }
+                    let domain_len = self.buf[4] as usize;
+                    if self.buf.len() < 5 + domain_len + 2 {
+                        return Ok(());
+                    }
+                    let _  = self.buf.split_to(5);
+                    let buf = self.buf.split_to(domain_len);
+                    let url = String::from_utf8(buf.to_vec()).or(Err(SocketErr))?;
+                    head.set_url(&url);
+                },
+                _ => {
+                    return Err(UnImplementErr);
+                }
+            }
+        }
+        let buf = self.buf.split_to(2);
+        let mut cur = Cursor::new(&buf);
+        let port = cur.read_u16::<BigEndian>().or(Err(SocketErr))?;
+        head.set_port(port);
+        info!("{:?}", head);
         Ok(())
     }
 
