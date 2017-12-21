@@ -7,6 +7,7 @@ pub enum ErrCode {
     ConfigErr = 4,
     UrlErr = 5,
     SocketErr = 6,
+    UnImplementErr = 7,
 
     UnDefined = 10000, //未知错误
 }
@@ -29,6 +30,7 @@ impl ErrCode {
             ErrCode::ConfigErr => "配置错误",
             ErrCode::UrlErr => "url错误",
             ErrCode::SocketErr => "socket错误",
+            ErrCode::UnImplementErr => "所用功能未实现",
 
             ErrCode::UnDefined => "未知错误",
         }
@@ -43,6 +45,7 @@ impl ErrCode {
             4 => ErrCode::ConfigErr,
             5 => ErrCode::UrlErr,
             6 => ErrCode::SocketErr,
+            7 => ErrCode::UnImplementErr,
 
             _ => ErrCode::UnDefined,
         }
