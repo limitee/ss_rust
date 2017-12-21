@@ -1,9 +1,9 @@
 //! Relay for TCP server that running on local environment
 
 use super::socks5_local;
-use relay::BoxIoFuture;
+use define::RunRst;
 
 /// Starts a TCP local server
-pub fn run() -> BoxIoFuture<()> {
+pub fn run() -> RunRst {
     socks5_local::run()
 }

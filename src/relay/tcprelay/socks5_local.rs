@@ -24,6 +24,9 @@ use relay::tcprelay::crypto_io::{DecryptedRead, EncryptedWrite};
 
 use super::{ignore_until_end, try_timeout, tunnel};
 
+use define::RunRst;
+use define::ErrCode::*;
+
 #[derive(Debug, Clone)]
 struct UdpConfig {
     enable_udp: bool,
@@ -194,24 +197,20 @@ fn handle_socks5_client(s: TcpStream, conf: Rc<ServerConfig>, udp_conf: UdpConfi
 }
 
 /// Starts a TCP local server with Socks5 proxy protocol
-pub fn run() -> Box<Future<Item = (), Error = io::Error>> {
+pub fn run() -> RunRst {
     let (listener, local_addr) = Context::with(|ctx| {
-        let config = &ctx.config;
-        let handle = &ctx.handle;
-
-        let local_addr = config.local.as_ref().unwrap();
-
-        let l = TcpListener::bind(&local_addr, &handle).unwrap_or_else(|err| panic!("Failed to listen, {}", err));
-
-        info!("ShadowSocks TCP Listening on {}", local_addr);
-        (l, *local_addr)
-    });
-
+        let local_addr = ctx.config.local.as_ref().ok_or(ConfigErr)?;
+        let l = TcpListener::bind(&local_addr, &ctx.handle).or_else(|err| {
+            error!("Failed to listen, {}", err);
+            Err(ConfigErr)
+        })?;
+        Ok((l, *local_addr))
+    })?;
+    info!("ShadowSocks TCP Listening on {}", local_addr);
     let udp_conf = UdpConfig {
         enable_udp: Context::with(|ctx| ctx.config.enable_udp),
         client_addr: Rc::new(local_addr),
     };
-
     let mut servers = Context::with(|ctx| RoundRobin::new(ctx.config()));
     let listening = listener.incoming().for_each(move |(socket, addr)| {
                                                      let server_cfg = servers.pick_server();
@@ -220,8 +219,9 @@ pub fn run() -> Box<Future<Item = (), Error = io::Error>> {
                                                      handle_socks5_client(socket, server_cfg, udp_conf.clone())
                                                  });
 
-    Box::new(listening.map_err(|err| {
+    let ft = Box::new(listening.map_err(|err| {
                                    error!("Socks5 server run failed: {}", err);
                                    err
-                               }))
+                               }));
+    Ok(ft)
 }

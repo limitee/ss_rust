@@ -39,11 +39,11 @@ pub fn run(mut config: Config) -> io::Result<()> {
 
     let context = Context::new(handle, config);
     Context::set(&context, move || if enable_udp {
-        let tcp_fut = run_tcp();
+        let tcp_fut = run_tcp().unwrap();
         let udp_fut = run_udp();
         lp.run(tcp_fut.join(udp_fut).map(|_| ()))
     } else {
-        let tcp_fut = run_tcp();
+        let tcp_fut = run_tcp().unwrap();
         lp.run(tcp_fut)
     })
 }

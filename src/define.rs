@@ -4,6 +4,7 @@ pub enum ErrCode {
     DigestFailure = 1,
     FileErr = 2,
     JsonErr = 3,
+    ConfigErr = 4,
 
     UnDefined = 10000, //未知错误
 }
@@ -23,6 +24,7 @@ impl ErrCode {
             ErrCode::DigestFailure => "加密检验失败",
             ErrCode::FileErr => "文件错误",
             ErrCode::JsonErr => "json错误",
+            ErrCode::ConfigErr => "配置错误",
 
             ErrCode::UnDefined => "未知错误",
         }
@@ -34,8 +36,14 @@ impl ErrCode {
             1 => ErrCode::DigestFailure,
             2 => ErrCode::FileErr,
             3 => ErrCode::JsonErr,
+            4 => ErrCode::ConfigErr,
 
             _ => ErrCode::UnDefined,
         }
     }
 }
+
+extern crate futures;
+use futures::Future;
+use std::io;
+pub type RunRst = Result<Box<Future<Item = (), Error = io::Error>>, ErrCode>;
