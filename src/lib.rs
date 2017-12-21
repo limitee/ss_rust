@@ -117,3 +117,7 @@ pub mod relay;
 pub mod crypto;
 pub mod plugin;
 mod monitor;
+
+pub mod define;
+pub use define::*;
+

@@ -635,7 +635,7 @@ impl Config {
         Ok(ServerConfig::new(addr, password, method, timeout, plugin))
     }
 
-    fn parse_json_object(o: &Map<String, Value>, require_local_info: bool) -> Result<Config, Error> {
+    pub fn parse_json_object(o: &Map<String, Value>, require_local_info: bool) -> Result<Config, Error> {
         let mut config = Config::new();
 
         if o.contains_key("servers") {
