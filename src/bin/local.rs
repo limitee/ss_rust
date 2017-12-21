@@ -17,9 +17,10 @@ use base_config::CFG;
 extern crate base_log;
 use base_log::init_base_log;
 
-use shadowsocks::{Config, run_local, ErrCode};
+use shadowsocks::{Config, run_local, ErrCode, local};
 use ErrCode::*;
 
+/*
 fn try_main() -> Result<(), ErrCode> {
     info!("{}", *CFG);
     info!("ShadowSocks {}", shadowsocks::VERSION);
@@ -27,6 +28,13 @@ fn try_main() -> Result<(), ErrCode> {
     let config = Config::parse_json_object(json_obj, true).or(Err(FileErr))?; 
     debug!("{}", config);
     run_local(config).unwrap();
+    Ok(())
+}
+*/
+
+fn try_main() -> Result<(), ErrCode> {
+    let mut server = local::LocalServer::new("127.0.0.1", 1080)?;
+    let _ = server.start();
     Ok(())
 }
 

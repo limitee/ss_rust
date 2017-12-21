@@ -120,6 +120,8 @@ pub mod crypto;
 pub mod plugin;
 mod monitor;
 
+pub mod local;
+
 pub mod define;
 pub use define::*;
 

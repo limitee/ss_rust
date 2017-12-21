@@ -5,6 +5,8 @@ pub enum ErrCode {
     FileErr = 2,
     JsonErr = 3,
     ConfigErr = 4,
+    UrlErr = 5,
+    SocketErr = 6,
 
     UnDefined = 10000, //未知错误
 }
@@ -25,6 +27,8 @@ impl ErrCode {
             ErrCode::FileErr => "文件错误",
             ErrCode::JsonErr => "json错误",
             ErrCode::ConfigErr => "配置错误",
+            ErrCode::UrlErr => "url错误",
+            ErrCode::SocketErr => "socket错误",
 
             ErrCode::UnDefined => "未知错误",
         }
@@ -37,6 +41,8 @@ impl ErrCode {
             2 => ErrCode::FileErr,
             3 => ErrCode::JsonErr,
             4 => ErrCode::ConfigErr,
+            5 => ErrCode::UrlErr,
+            6 => ErrCode::SocketErr,
 
             _ => ErrCode::UnDefined,
         }
