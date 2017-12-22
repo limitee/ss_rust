@@ -255,9 +255,8 @@ impl Protocol {
             ipv4_addr = helper::get_ip_addr(&self.conn_head.url)?;
             info!("resolver the site to ip:{}", ipv4_addr);
         }
-        Err(NetErr)
-        //let stream = TcpStream::connect(
-        //Ok(())
+        let stream = TcpStream::connect((ipv4_addr, self.conn_head.port)).or(Err(NetErr))?;
+        Ok(())
     }
     
     pub fn connect_err(&mut self) -> Result<(), ErrCode> {
