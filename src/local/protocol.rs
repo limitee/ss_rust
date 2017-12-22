@@ -284,7 +284,7 @@ impl Protocol {
                 let rst = stream_read.read(&mut buf);
                 match rst {
                     Ok(size) => {
-                        info!("local stream receive {} bytes data.", size);
+                        //info!("local stream receive {} bytes data.", size);
                         if size == 0 {
                             break;
                         }
@@ -311,7 +311,7 @@ impl Protocol {
                 let rst = target_stream_read.read(&mut buf);
                 match rst {
                     Ok(size) => {
-                        info!("target stream receive {} bytes data.", size);
+                        //info!("target stream receive {} bytes data.", size);
                         if size == 0 {
                             break;
                         }
