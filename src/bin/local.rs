@@ -17,7 +17,7 @@ use base_config::CFG;
 extern crate base_log;
 use base_log::init_base_log;
 
-use shadowsocks::{Config, run_local, ErrCode, local};
+use shadowsocks::{ErrCode, local};
 use ErrCode::*;
 
 /*

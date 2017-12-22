@@ -6,12 +6,15 @@ use std::io::{Read, Write};
 use std::io::Cursor;
 use std::time::Duration;
 use std::collections::HashSet;
+use std::{thread};
 
 extern crate byteorder;
 use byteorder::{BigEndian, ReadBytesExt};
 
 extern crate bytes;
 use bytes::{BytesMut, BufMut};
+
+use std::sync::mpsc::{channel};
 
 use helper;
 
@@ -117,11 +120,12 @@ impl ProStep {
 }
 
 pub struct Protocol {
-    stream: TcpStream,
+    stream: TcpStream, //stream to the client
     buf: BytesMut,
     step: ProStep,
     start_head: StartHead,
     conn_head: ConnectHead,
+    target_stream: Option<TcpStream>, //stream to the target
 }
 
 impl Protocol {
@@ -134,6 +138,7 @@ impl Protocol {
             step: ProStep::Start,
             start_head: Default::default(),
             conn_head: Default::default(),
+            target_stream: None,
         }
     }
 
@@ -167,11 +172,11 @@ impl Protocol {
                 let rst = self.connect_target();
                 match rst {
                     Ok(_) => {
-
+                        let _ = self.connect_success()?;
+                        let _ = self.tunnel()?;
                     },
-                    Err(e) => {
+                    Err(_e) => {
                         let _ = self.connect_err()?;
-                        //return Err(e);
                     },
                 }
             },
@@ -254,8 +259,95 @@ impl Protocol {
         } else {
             ipv4_addr = helper::get_ip_addr(&self.conn_head.url)?;
             info!("resolver the site to ip:{}", ipv4_addr);
+            //save the resolver ip to head
+            let parts = ipv4_addr.octets();
+            let ip = Ip::new(parts[0], parts[1], parts[2], parts[3]);
+            self.conn_head.ip = ip;
         }
-        let stream = TcpStream::connect((ipv4_addr, self.conn_head.port)).or(Err(NetErr))?;
+        self.target_stream = Some(TcpStream::connect((ipv4_addr, self.conn_head.port)).or(Err(NetErr))?);
+        Ok(())
+    }
+
+    pub fn tunnel(&mut self) -> Result<(), ErrCode> {
+        let (sx, rx) = channel::<u64>();
+        let stream = self.stream.try_clone().or(Err(SocketErr))?;
+        let _ = stream.set_read_timeout(None).or(Err(SocketErr))?;
+
+        let target_stream = self.target_stream.take().ok_or(SocketErr)?;
+
+        let sx1 = sx.clone();
+        let mut stream_read = stream.try_clone().or(Err(SocketErr))?;
+        let mut target_stream_write = target_stream.try_clone().or(Err(SocketErr))?;
+        let _th1 = thread::spawn(move || {
+            let mut buf = vec![0u8; 1024];
+            loop {
+                let rst = stream_read.read(&mut buf);
+                match rst {
+                    Ok(size) => {
+                        info!("local stream receive {} bytes data.", size);
+                        if size == 0 {
+                            break;
+                        }
+                        let rst = target_stream_write.write_all(&buf[0..size]);
+                        if rst.is_err() {
+                            break;
+                        }
+                    },
+                    Err(e) => {
+                        error!("{}", e);
+                        break;
+                    }
+                }
+            }
+            let _ = sx1.send(0);
+        });
+
+        let sx2 = sx.clone();
+        let mut stream_write = stream.try_clone().or(Err(SocketErr))?;
+        let mut target_stream_read = target_stream.try_clone().or(Err(SocketErr))?;
+        let _th2 = thread::spawn(move || {
+            let mut buf = vec![0u8; 1024];
+            loop {
+                let rst = target_stream_read.read(&mut buf);
+                match rst {
+                    Ok(size) => {
+                        info!("target stream receive {} bytes data.", size);
+                        if size == 0 {
+                            break;
+                        }
+                        let rst = stream_write.write_all(&buf[0..size]);
+                        if rst.is_err() {
+                            break;
+                        }
+                    },
+                    Err(e) => {
+                        error!("{}", e);
+                        break;
+                    }
+                }
+            }
+            let _ = sx2.send(0);
+        });
+
+        //th1 or th2 finished, will return.
+        let _ = rx.recv().or(Err(SocketErr))?;
+        Err(SocketErr)
+    }
+
+    ///connect the target success
+    pub fn connect_success(&mut self) -> Result<(), ErrCode> {
+        let mut buf = BytesMut::from(vec![5, 0, 0, 1]);
+        //ip
+        buf.reserve(4);
+        let ip = &self.conn_head.ip;
+        buf.put_u8(ip.first);
+        buf.put_u8(ip.second);
+        buf.put_u8(ip.third);
+        buf.put_u8(ip.forth);
+        //port 
+        buf.reserve(2);
+        buf.put_u16::<BigEndian>(self.conn_head.port);
+        let _ = self.stream.write_all(&buf).or(Err(SocketErr))?;
         Ok(())
     }
     
