@@ -8,6 +8,8 @@ pub enum ErrCode {
     UrlErr = 5,
     SocketErr = 6,
     UnImplementErr = 7,
+    KeyFmtErr = 8,
+    NetErr = 9,
 
     UnDefined = 10000, //未知错误
 }
@@ -31,6 +33,8 @@ impl ErrCode {
             ErrCode::UrlErr => "url错误",
             ErrCode::SocketErr => "socket错误",
             ErrCode::UnImplementErr => "所用功能未实现",
+            ErrCode::KeyFmtErr => "键格式错误",
+            ErrCode::NetErr => "网络错误",
 
             ErrCode::UnDefined => "未知错误",
         }
@@ -46,6 +50,8 @@ impl ErrCode {
             5 => ErrCode::UrlErr,
             6 => ErrCode::SocketErr,
             7 => ErrCode::UnImplementErr,
+            8 => ErrCode::KeyFmtErr,
+            9 => ErrCode::NetErr,
 
             _ => ErrCode::UnDefined,
         }

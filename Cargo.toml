@@ -60,6 +60,8 @@ libsodium-ffi = { git = "https://github.com/zonyitoo/libsodium-ffi", optional = 
 futures-cpupool = "0.1"
 miscreant = { version = "0.2", optional = true }
 
+trust-dns-resolver = "^0.7"
+
 base_log = {git = "https://code.csdn.net/limite_god/base_log.git"}
 base_config = {git = "https://code.csdn.net/limite_god/base_config.git"}
 

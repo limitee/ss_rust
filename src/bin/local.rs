@@ -33,7 +33,10 @@ fn try_main() -> Result<(), ErrCode> {
 */
 
 fn try_main() -> Result<(), ErrCode> {
-    let mut server = local::LocalServer::new("127.0.0.1", 1080)?;
+    info!("{}", *CFG);
+    let local_addr = CFG["local_address"].as_str().ok_or(KeyFmtErr)?;
+    let local_port = CFG["local_port"].as_u64().ok_or(KeyFmtErr)? as u32;
+    let mut server = local::LocalServer::new(local_addr, local_port)?;
     let _ = server.start();
     Ok(())
 }

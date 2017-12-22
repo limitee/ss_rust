@@ -106,6 +106,8 @@ extern crate tokio_signal;
 extern crate byte_string;
 extern crate url;
 
+extern crate trust_dns_resolver;
+
 /// ShadowSocks version
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -124,4 +126,6 @@ pub mod local;
 
 pub mod define;
 pub use define::*;
+
+mod helper;
 

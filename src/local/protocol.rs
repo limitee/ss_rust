@@ -1,7 +1,7 @@
 use define::ErrCode;
 use define::ErrCode::*;
 
-use std::net::{TcpStream};
+use std::net::{TcpStream, Ipv4Addr};
 use std::io::{Read, Write};
 use std::io::Cursor;
 use std::time::Duration;
@@ -12,6 +12,8 @@ use byteorder::{BigEndian, ReadBytesExt};
 
 extern crate bytes;
 use bytes::{BytesMut, BufMut};
+
+use helper;
 
 #[derive(Default, Debug)]
 struct Ip {
@@ -30,6 +32,10 @@ impl Ip {
             third:t,
             forth:f,
         }
+    }
+
+    pub fn to_ipv4(&self) -> Ipv4Addr {
+        Ipv4Addr::new(self.first, self.second, self.third, self.forth)
     }
 }
 
@@ -96,6 +102,7 @@ impl StartHead {
 enum ProStep {
     Start = 0, 
     Connect = 1,
+    ConnectTarget = 2,
 }
 
 impl ProStep {
@@ -103,7 +110,8 @@ impl ProStep {
     pub fn next(&mut self) {
         match *self {
             ProStep::Start => *self = ProStep::Connect,
-            ProStep::Connect => panic!("not implement"),
+            ProStep::Connect => *self = ProStep::ConnectTarget,
+            ProStep::ConnectTarget => panic!("not implement"),
         }
     }
 }
@@ -113,6 +121,7 @@ pub struct Protocol {
     buf: BytesMut,
     step: ProStep,
     start_head: StartHead,
+    conn_head: ConnectHead,
 }
 
 impl Protocol {
@@ -124,6 +133,7 @@ impl Protocol {
             buf: BytesMut::with_capacity(1024),
             step: ProStep::Start,
             start_head: Default::default(),
+            conn_head: Default::default(),
         }
     }
 
@@ -154,6 +164,18 @@ impl Protocol {
             },
             ProStep::Connect => {
                 let _ = self.connect()?;
+                let rst = self.connect_target();
+                match rst {
+                    Ok(_) => {
+
+                    },
+                    Err(e) => {
+                        let _ = self.connect_err()?;
+                        //return Err(e);
+                    },
+                }
+            },
+            ProStep::ConnectTarget => {
             },
         }
         Ok(())
@@ -219,6 +241,46 @@ impl Protocol {
         let port = cur.read_u16::<BigEndian>().or(Err(SocketErr))?;
         head.set_port(port);
         info!("{:?}", head);
+        self.conn_head = head;
+        self.step.next();
+        Ok(())
+    }
+
+    pub fn connect_target(&mut self) -> Result<(), ErrCode> {
+        let atyp = self.conn_head.atyp;
+        let ipv4_addr;
+        if atyp == 1 {
+            ipv4_addr = self.conn_head.ip.to_ipv4();
+        } else {
+            ipv4_addr = helper::get_ip_addr(&self.conn_head.url)?;
+            info!("resolver the site to ip:{}", ipv4_addr);
+        }
+        Err(NetErr)
+        //let stream = TcpStream::connect(
+        //Ok(())
+    }
+    
+    pub fn connect_err(&mut self) -> Result<(), ErrCode> {
+        let mut buf = BytesMut::from(vec![5, 1, 0]);
+        let atyp = self.conn_head.atyp;
+        buf.reserve(1);
+        buf.put_u8(atyp);
+        if atyp == 1 {
+            buf.reserve(4);
+            let ip = &self.conn_head.ip;
+            buf.put_u8(ip.first);
+            buf.put_u8(ip.second);
+            buf.put_u8(ip.third);
+            buf.put_u8(ip.forth);
+        } else {
+            let url_bytes = self.conn_head.url.as_bytes();
+            buf.reserve(url_bytes.len() + 1);
+            buf.put_u8(url_bytes.len() as u8);
+            buf.put_slice(&url_bytes);
+        }
+        buf.reserve(2);
+        buf.put_u16::<BigEndian>(self.conn_head.port);
+        let _ = self.stream.write_all(&buf).or(Err(SocketErr))?;
         Ok(())
     }
 
