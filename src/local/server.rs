@@ -41,7 +41,7 @@ impl LocalServer {
         let peer_addr = stream.peer_addr().or(Err(SocketErr))?;
         info!("{}", peer_addr);
         let _ = thread::spawn(move|| {
-            let mut pro = Protocol::new(stream, 4000);
+            let mut pro = Protocol::new(stream, 20000);
             let _ = pro.start();
         });
         Ok(())

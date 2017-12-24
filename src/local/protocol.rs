@@ -148,7 +148,10 @@ impl Protocol {
             let rst = self.stream.read(&mut buf);
             match rst {
                 Ok(size) => {
-                    info!("receive {} bytes data.", size);
+                    //info!("receive {} bytes data.", size);
+                    if size == 0 {
+                        break;
+                    }
                     self.buf.reserve(size);
                     self.buf.extend_from_slice(&buf[0..size]);
                     let _ = self.handle()?;
