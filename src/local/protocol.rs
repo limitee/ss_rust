@@ -306,7 +306,7 @@ impl Protocol {
     pub fn tunnel(&mut self) -> Result<(), ErrCode> {
         let (sx, rx) = channel::<u64>();
         let stream = self.stream.try_clone().or(Err(SocketErr))?;
-        //let _ = stream.set_read_timeout(None).or(Err(SocketErr))?;
+        let _ = stream.set_write_timeout(Some(Duration::from_millis(self.time_out))).or(Err(SocketErr))?;
         let target_stream = self.target_stream.take().ok_or(SocketErr)?;
         let _ = target_stream.set_read_timeout(Some(Duration::from_millis(self.time_out))).or(Err(SocketErr))?;
 
@@ -314,7 +314,7 @@ impl Protocol {
         let mut stream_read = stream.try_clone().or(Err(SocketErr))?;
         let mut target_stream_write = target_stream.try_clone().or(Err(SocketErr))?;
         let _th1 = thread::spawn(move || {
-            let mut buf = vec![0u8; 128];
+            let mut buf = vec![0u8; 1024];
             loop {
                 let rst = stream_read.read(&mut buf);
                 match rst {
@@ -342,7 +342,7 @@ impl Protocol {
         let mut stream_write = stream.try_clone().or(Err(SocketErr))?;
         let mut target_stream_read = target_stream.try_clone().or(Err(SocketErr))?;
         let _th2 = thread::spawn(move || {
-            let mut buf = vec![0u8; 128];
+            let mut buf = vec![0u8; 1024];
             loop {
                 let rst = target_stream_read.read(&mut buf);
                 match rst {

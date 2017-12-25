@@ -233,7 +233,7 @@ impl Protocol {
         let mut stream_read = stream.try_clone().or(Err(SocketErr))?;
         let mut target_stream_write = target_stream.try_clone().or(Err(SocketErr))?;
         let _th1 = thread::spawn(move || {
-            let mut buf = vec![0u8; 128];
+            let mut buf = vec![0u8; 1024];
             loop {
                 let rst = stream_read.read(&mut buf);
                 match rst {
@@ -261,7 +261,7 @@ impl Protocol {
         let mut stream_write = stream.try_clone().or(Err(SocketErr))?;
         let mut target_stream_read = target_stream.try_clone().or(Err(SocketErr))?;
         let _th2 = thread::spawn(move || {
-            let mut buf = vec![0u8; 128];
+            let mut buf = vec![0u8; 1024];
             loop {
                 let rst = target_stream_read.read(&mut buf);
                 match rst {
