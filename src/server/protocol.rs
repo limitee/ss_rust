@@ -1,7 +1,8 @@
 use define::ErrCode;
 use define::ErrCode::*;
 
-use std::net::{TcpStream, Ipv4Addr};
+use std::net::{Shutdown, TcpStream, Ipv4Addr};
+use std::net::ToSocketAddrs;
 use std::io::{Read, Write};
 use std::io::Cursor;
 use std::time::Duration;
@@ -91,6 +92,7 @@ pub struct Protocol {
     step: ProStep,
     conn_head: ConnectHead,
     target_stream: Option<TcpStream>, //stream to the target
+    time_out: u64,
 }
 
 impl Protocol {
@@ -103,6 +105,7 @@ impl Protocol {
             step: ProStep::Connect,
             conn_head: Default::default(),
             target_stream: None,
+            time_out: time_out,
         }
     }
 
@@ -218,16 +221,27 @@ impl Protocol {
             self.conn_head.ip = ip;
         }
         info!("{}:{}:{} and buf len is {}.", self.conn_head.url, ipv4_addr, self.conn_head.port, self.buf.len());
-        self.target_stream = Some(TcpStream::connect((ipv4_addr, self.conn_head.port)).or(Err(NetErr))?);
+        let time_out = Duration::from_secs(self.time_out);
+        let addr = (ipv4_addr, self.conn_head.port).to_socket_addrs().or(Err(NetErr))?.next().ok_or(NetErr)?;
+        self.target_stream = Some(TcpStream::connect_timeout(&addr, time_out).or(Err(NetErr))?);
         Ok(())
     }
 
     pub fn tunnel(&mut self) -> Result<(), ErrCode> {
         let (sx, rx) = channel::<u64>();
         let stream = self.stream.try_clone().or(Err(SocketErr))?;
-        let _ = stream.set_read_timeout(None).or(Err(SocketErr))?;
-
         let target_stream = self.target_stream.take().ok_or(SocketErr)?;
+
+        //write time out 1 minute
+        let _ = stream.set_write_timeout(Some(Duration::from_millis(60*1000))).or(Err(SocketErr))?;
+        let _ = target_stream.set_write_timeout(Some(Duration::from_millis(60*1000))).or(Err(SocketErr))?;
+
+        //read time out 6 minute 
+        //let _ = stream.set_read_timeout(Some(Duration::from_millis(6*60*1000))).or(Err(SocketErr))?;
+        //let _ = target_stream.set_read_timeout(Some(Duration::from_millis(6*60*1000))).or(Err(SocketErr))?;
+
+        let _ = stream.set_read_timeout(None).or(Err(SocketErr))?;
+        let _ = target_stream.set_read_timeout(None).or(Err(SocketErr))?;
 
         let sx1 = sx.clone();
         let mut stream_read = stream.try_clone().or(Err(SocketErr))?;
@@ -287,6 +301,8 @@ impl Protocol {
 
         //th1 or th2 finished, will return.
         let _ = rx.recv().or(Err(SocketErr))?;
+        let _ = stream.shutdown(Shutdown::Both).expect("shutdown call failed");
+        let _ = target_stream.shutdown(Shutdown::Both).expect("shutdown call failed");
 
         Err(SocketErr)
     }
