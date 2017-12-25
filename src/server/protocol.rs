@@ -44,9 +44,6 @@ impl Ip {
 
 #[derive(Default, Debug)]
 struct ConnectHead {
-    version: u8,
-    cmd: u8,
-    rsv: u8,
     atyp: u8,
     ip: Ip,
     url: String,
@@ -54,18 +51,6 @@ struct ConnectHead {
 }
 
 impl ConnectHead {
-
-    pub fn set_version(&mut self, version:u8) {
-        self.version = version;
-    }
-
-    pub fn set_cmd(&mut self, cmd:u8) {
-        self.cmd = cmd;
-    }
-
-    pub fn set_rsv(&mut self, rsv:u8) {
-        self.rsv = rsv;
-    }
 
     pub fn set_atyp(&mut self, atyp:u8) {
         self.atyp = atyp;
@@ -84,26 +69,8 @@ impl ConnectHead {
     }
 }
 
-#[derive(Default, Debug)]
-struct StartHead {
-    version: u8,
-    method: u8,
-}
-
-impl StartHead {
-    
-    pub fn set_version(&mut self, version:u8) {
-        self.version = version;
-    }
-
-    pub fn set_method(&mut self, method:u8) {
-        self.method = method;
-    }
-}
-
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 enum ProStep {
-    Start = 0, 
     Connect = 1,
     ConnectTarget = 2,
 }
@@ -112,7 +79,6 @@ impl ProStep {
     
     pub fn next(&mut self) {
         match *self {
-            ProStep::Start => *self = ProStep::Connect,
             ProStep::Connect => *self = ProStep::ConnectTarget,
             ProStep::ConnectTarget => panic!("not implement"),
         }
@@ -123,10 +89,8 @@ pub struct Protocol {
     stream: TcpStream, //stream to the client
     buf: BytesMut,
     step: ProStep,
-    start_head: StartHead,
     conn_head: ConnectHead,
     target_stream: Option<TcpStream>, //stream to the target
-    time_out: u64,
 }
 
 impl Protocol {
@@ -136,11 +100,9 @@ impl Protocol {
         Protocol {
             stream: stream,
             buf: BytesMut::with_capacity(1024),
-            step: ProStep::Start,
-            start_head: Default::default(),
+            step: ProStep::Connect,
             conn_head: Default::default(),
             target_stream: None,
-            time_out: time_out,
         }
     }
 
@@ -169,15 +131,12 @@ impl Protocol {
 
     pub fn handle(&mut self) -> Result<(), ErrCode> {
         match self.step {
-            ProStep::Start => {
-                let _ = self.get_start_head()?;
-            },
             ProStep::Connect => {
                 let _ = self.connect()?;
                 let rst = self.connect_target();
                 match rst {
                     Ok(_) => {
-                        let _ = self.connect_success()?;
+                        //let _ = self.connect_success()?;
                         let _ = self.tunnel()?;
                     },
                     Err(_e) => {
@@ -192,33 +151,23 @@ impl Protocol {
     }
 
     pub fn connect(&mut self) -> Result<(), ErrCode> {
-        if self.buf.len() < 4 {
+        if self.buf.len() < 1 {
             return Ok(());
         }
-        let version;
-        let cmd;
-        let rsv;
         let atyp;
         let mut head:ConnectHead = Default::default();
         {
             {
-                let mut cur = Cursor::new(&self.buf[0..4]);
-                version = cur.read_u8().or(Err(SocketErr))?;
-                cmd = cur.read_u8().or(Err(SocketErr))?;
-                rsv = cur.read_u8().or(Err(SocketErr))?;
+                let mut cur = Cursor::new(&self.buf[0..1]);
                 atyp = cur.read_u8().or(Err(SocketErr))?;
-
-                head.set_version(version);
-                head.set_cmd(cmd);
-                head.set_rsv(rsv);
                 head.set_atyp(atyp);
             }
             match atyp {
                 1 => {
-                    if self.buf.len() < 10 {
+                    if self.buf.len() < 7 {
                         return Ok(());
                     }
-                    let _ = self.buf.split_to(4);
+                    let _ = self.buf.split_to(1);
                     let ip_buf = self.buf.split_to(4);
                     let mut ip_cur = Cursor::new(&ip_buf);
                     let fs = ip_cur.read_u8().or(Err(SocketErr))?;
@@ -229,14 +178,14 @@ impl Protocol {
                     head.set_ip(ip);
                 },
                 3 => {
-                    if self.buf.len() < 5 {
+                    if self.buf.len() < 2 {
                         return Ok(());
                     }
-                    let domain_len = self.buf[4] as usize;
-                    if self.buf.len() < 5 + domain_len + 2 {
+                    let domain_len = self.buf[1] as usize;
+                    if self.buf.len() < 2 + domain_len + 2 {
                         return Ok(());
                     }
-                    let _  = self.buf.split_to(5);
+                    let _  = self.buf.split_to(2);
                     let buf = self.buf.split_to(domain_len);
                     let url = String::from_utf8(buf.to_vec()).or(Err(SocketErr))?;
                     head.set_url(&url);
@@ -250,65 +199,35 @@ impl Protocol {
         let mut cur = Cursor::new(&buf);
         let port = cur.read_u16::<BigEndian>().or(Err(SocketErr))?;
         head.set_port(port);
-        info!("{:?} and buf len is {}.", head, self.buf.len());
+        info!("{:?}", head);
         self.conn_head = head;
-        self.step.next();
         Ok(())
     }
 
     pub fn connect_target(&mut self) -> Result<(), ErrCode> {
-        /*
         let atyp = self.conn_head.atyp;
         let ipv4_addr;
         if atyp == 1 {
             ipv4_addr = self.conn_head.ip.to_ipv4();
         } else {
             ipv4_addr = helper::get_ip_addr(&self.conn_head.url)?;
-            info!("resolver the site to ip:{}", ipv4_addr);
+            //info!("resolver the site to ip:{}", ipv4_addr);
             //save the resolver ip to head
             let parts = ipv4_addr.octets();
             let ip = Ip::new(parts[0], parts[1], parts[2], parts[3]);
             self.conn_head.ip = ip;
         }
+        info!("{}:{}:{} and buf len is {}.", self.conn_head.url, ipv4_addr, self.conn_head.port, self.buf.len());
         self.target_stream = Some(TcpStream::connect((ipv4_addr, self.conn_head.port)).or(Err(NetErr))?);
-        */
-        self.target_stream = Some(TcpStream::connect(("127.0.0.1", 8888)).or(Err(NetErr))?);
-        let _ = self.write_ss_head()?;
-        Ok(())
-    }
-
-    ///send the ss head
-    pub fn write_ss_head(&mut self) -> Result<(), ErrCode> {
-        let mut buf = BytesMut::new();
-        let atyp = self.conn_head.atyp;
-        buf.reserve(1);
-        buf.put_u8(atyp);
-        if atyp == 1 {
-            buf.reserve(4);
-            let ip = &self.conn_head.ip;
-            buf.put_u8(ip.first);
-            buf.put_u8(ip.second);
-            buf.put_u8(ip.third);
-            buf.put_u8(ip.forth);
-        } else {
-            let url_bytes = self.conn_head.url.as_bytes();
-            buf.reserve(url_bytes.len() + 1);
-            buf.put_u8(url_bytes.len() as u8);
-            buf.put_slice(&url_bytes);
-        }
-        buf.reserve(2);
-        buf.put_u16::<BigEndian>(self.conn_head.port);
-        let mut stream = self.target_stream.as_ref().ok_or(NetErr)?;
-        let _ = stream.write_all(&buf).or(Err(SocketErr))?;
         Ok(())
     }
 
     pub fn tunnel(&mut self) -> Result<(), ErrCode> {
         let (sx, rx) = channel::<u64>();
         let stream = self.stream.try_clone().or(Err(SocketErr))?;
-        //let _ = stream.set_read_timeout(None).or(Err(SocketErr))?;
+        let _ = stream.set_read_timeout(None).or(Err(SocketErr))?;
+
         let target_stream = self.target_stream.take().ok_or(SocketErr)?;
-        let _ = target_stream.set_read_timeout(Some(Duration::from_millis(self.time_out))).or(Err(SocketErr))?;
 
         let sx1 = sx.clone();
         let mut stream_read = stream.try_clone().or(Err(SocketErr))?;
@@ -319,7 +238,7 @@ impl Protocol {
                 let rst = stream_read.read(&mut buf);
                 match rst {
                     Ok(size) => {
-                        info!("local stream receive {} bytes data.", size);
+                        //info!("local stream receive {} bytes data.", size);
                         if size == 0 {
                             break;
                         }
@@ -334,7 +253,7 @@ impl Protocol {
                     }
                 }
             }
-            info!("client closed.");
+            info!("local closed.");
             let _ = sx1.send(0);
         });
 
@@ -347,7 +266,7 @@ impl Protocol {
                 let rst = target_stream_read.read(&mut buf);
                 match rst {
                     Ok(size) => {
-                        info!("target stream receive {} bytes data.", size);
+                        //info!("target stream receive {} bytes data.", size);
                         if size == 0 {
                             break;
                         }
@@ -362,7 +281,7 @@ impl Protocol {
                     }
                 }
             }
-            info!("server closed.");
+            info!("target closed.");
             let _ = sx2.send(0);
         });
 
@@ -374,102 +293,15 @@ impl Protocol {
 
     ///connect the target success
     pub fn connect_success(&mut self) -> Result<(), ErrCode> {
-        let mut buf = BytesMut::from(vec![5, 0, 0]);
-        let atyp = self.conn_head.atyp;
-        buf.reserve(1);
-        buf.put_u8(atyp);
-        if atyp == 1 {
-            buf.reserve(4);
-            let ip = &self.conn_head.ip;
-            buf.put_u8(ip.first);
-            buf.put_u8(ip.second);
-            buf.put_u8(ip.third);
-            buf.put_u8(ip.forth);
-        } else {
-            let url_bytes = self.conn_head.url.as_bytes();
-            buf.reserve(url_bytes.len() + 1);
-            buf.put_u8(url_bytes.len() as u8);
-            buf.put_slice(&url_bytes);
-        }
-        buf.reserve(2);
-        buf.put_u16::<BigEndian>(self.conn_head.port);
-        let _ = self.stream.write_all(&buf).or(Err(SocketErr))?;
         Ok(())
     }
     
+    ///no used yet
     pub fn connect_err(&mut self) -> Result<(), ErrCode> {
-        let mut buf = BytesMut::from(vec![5, 1, 0]);
-        let atyp = self.conn_head.atyp;
-        buf.reserve(1);
-        buf.put_u8(atyp);
-        if atyp == 1 {
-            buf.reserve(4);
-            let ip = &self.conn_head.ip;
-            buf.put_u8(ip.first);
-            buf.put_u8(ip.second);
-            buf.put_u8(ip.third);
-            buf.put_u8(ip.forth);
-        } else {
-            let url_bytes = self.conn_head.url.as_bytes();
-            buf.reserve(url_bytes.len() + 1);
-            buf.put_u8(url_bytes.len() as u8);
-            buf.put_slice(&url_bytes);
-        }
-        buf.reserve(2);
-        buf.put_u16::<BigEndian>(self.conn_head.port);
-        let _ = self.stream.write_all(&buf).or(Err(SocketErr))?;
         Ok(())
     }
 
-    pub fn get_start_head(&mut self) -> Result<(), ErrCode> {
-        //at least 3 bytes required
-        if self.buf.len() < 3 {
-            return Ok(());
-        }
-        let version;
-        let method_len;
-        {
-            let mut cur = Cursor::new(&self.buf[0..2]);
-            version = cur.read_u8().or(Err(SocketErr))?;
-            method_len = cur.read_u8().or(Err(SocketErr))? as usize;
-            //msg head is not finished
-            if self.buf.len() < method_len + 2 {
-                return Ok(());
-            }
-        }
-        let _head_buf = self.buf.split_to(2);
-        let mut method_list = HashSet::new();
-        let method_buf = self.buf.split_to(method_len);
-        let mut method_cur = Cursor::new(method_buf);
-        for _ in 0..method_len {
-            let method = method_cur.read_u8().or(Err(SocketErr))?;
-            method_list.insert(method);
-        }
-        if version != 5 {
-            return Err(UnImplementErr);
-        }
-        if !method_list.contains(&0_u8) {
-            return Err(UnImplementErr);
-        }
-        self.start_head.set_version(version);
-        self.start_head.set_method(0);
-
-        let _ = self.back_start_head()?;
-        self.step.next();
-        Ok(())
-    }
-
-    pub fn back_start_head(&mut self) -> Result<(), ErrCode> {
-        let back_head = vec![5, 0];
-        let _ = self.stream.write_all(&back_head).or(Err(SocketErr))?;
-        Ok(())
-    }
 }
-
-
-
-
-
 
 
 

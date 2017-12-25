@@ -123,6 +123,7 @@ pub mod plugin;
 mod monitor;
 
 pub mod local;
+pub mod server;
 
 pub mod define;
 pub use define::*;
