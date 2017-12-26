@@ -365,8 +365,8 @@ impl Protocol {
 
         //th1 or th2 finished, will return.
         let _ = rx.recv().or(Err(SocketErr))?;
-        let _ = stream.shutdown(Shutdown::Both).expect("shutdown call failed");
-        let _ = target_stream.shutdown(Shutdown::Both).expect("shutdown call failed");
+        let _ = stream.shutdown(Shutdown::Both);
+        let _ = target_stream.shutdown(Shutdown::Both);
 
         Err(SocketErr)
     }
