@@ -1,3 +1,5 @@
+use std::net::{Shutdown, TcpStream, Ipv4Addr};
+
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum ErrCode {
     Success = 0,
@@ -10,6 +12,7 @@ pub enum ErrCode {
     UnImplementErr = 7,
     KeyFmtErr = 8,
     NetErr = 9,
+    LockErr = 10,
 
     UnDefined = 10000, //未知错误
 }
@@ -35,6 +38,7 @@ impl ErrCode {
             ErrCode::UnImplementErr => "所用功能未实现",
             ErrCode::KeyFmtErr => "键格式错误",
             ErrCode::NetErr => "网络错误",
+            ErrCode::LockErr => "锁错误",
 
             ErrCode::UnDefined => "未知错误",
         }
@@ -52,6 +56,7 @@ impl ErrCode {
             7 => ErrCode::UnImplementErr,
             8 => ErrCode::KeyFmtErr,
             9 => ErrCode::NetErr,
+            10 => ErrCode::LockErr,
 
             _ => ErrCode::UnDefined,
         }
@@ -62,3 +67,28 @@ extern crate futures;
 use futures::Future;
 use std::io;
 pub type RunRst = Result<Box<Future<Item = (), Error = io::Error>>, ErrCode>;
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct Ip {
+    pub first: u8,
+    pub second: u8,
+    pub third: u8,
+    pub forth: u8,
+}
+
+impl Ip {
+    
+    pub fn new(fs:u8, s:u8, t:u8, f:u8) -> Self {
+        Ip {
+            first:fs,
+            second:s,
+            third:t,
+            forth:f,
+        }
+    }
+
+    pub fn to_ipv4(&self) -> Ipv4Addr {
+        Ipv4Addr::new(self.first, self.second, self.third, self.forth)
+    }
+}
+

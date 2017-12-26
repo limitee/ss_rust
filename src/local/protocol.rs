@@ -1,4 +1,4 @@
-use define::ErrCode;
+use define::{Ip, ErrCode};
 use define::ErrCode::*;
 
 use std::net::{Shutdown, TcpStream, Ipv4Addr};
@@ -18,30 +18,7 @@ use bytes::{BytesMut, BufMut};
 use std::sync::mpsc::{channel};
 
 use helper;
-
-#[derive(Default, Debug)]
-struct Ip {
-    first: u8,
-    second: u8,
-    third: u8,
-    forth: u8,
-}
-
-impl Ip {
-    
-    pub fn new(fs:u8, s:u8, t:u8, f:u8) -> Self {
-        Ip {
-            first:fs,
-            second:s,
-            third:t,
-            forth:f,
-        }
-    }
-
-    pub fn to_ipv4(&self) -> Ipv4Addr {
-        Ipv4Addr::new(self.first, self.second, self.third, self.forth)
-    }
-}
+use helper::encode;
 
 #[derive(Default, Debug)]
 struct ConnectHead {
@@ -275,7 +252,10 @@ impl Protocol {
         */
         let time_out = Duration::from_secs(self.time_out);
         let addr = ("127.0.0.1", 8888).to_socket_addrs().or(Err(NetErr))?.next().ok_or(NetErr)?;
-        self.target_stream = Some(TcpStream::connect_timeout(&addr, time_out).or(Err(NetErr))?);
+
+        let target_stream = TcpStream::connect_timeout(&addr, time_out).or(Err(NetErr))?;
+        self.target_stream = Some(target_stream);
+
         let _ = self.write_ss_head()?;
         Ok(())
     }
@@ -302,7 +282,9 @@ impl Protocol {
         buf.reserve(2);
         buf.put_u16::<BigEndian>(self.conn_head.port);
         let mut stream = self.target_stream.as_ref().ok_or(NetErr)?;
-        let _ = stream.write_all(&buf).or(Err(SocketErr))?;
+        let _ = stream.write_all(&encode(&buf)).or(Err(SocketErr))?;
+        //write the upload buf
+        let _ = stream.write_all(&encode(&self.buf)).or(Err(SocketErr))?;
         Ok(())
     }
 
@@ -331,11 +313,11 @@ impl Protocol {
                 let rst = stream_read.read(&mut buf);
                 match rst {
                     Ok(size) => {
-                        info!("local stream receive {} bytes data.", size);
+                        //info!("local stream receive {} bytes data.", size);
                         if size == 0 {
                             break;
                         }
-                        let rst = target_stream_write.write_all(&buf[0..size]);
+                        let rst = target_stream_write.write_all(&encode(&buf[0..size]));
                         if rst.is_err() {
                             break;
                         }
@@ -346,7 +328,6 @@ impl Protocol {
                     }
                 }
             }
-            info!("client closed.");
             let _ = sx1.send(0);
         });
 
@@ -359,11 +340,11 @@ impl Protocol {
                 let rst = target_stream_read.read(&mut buf);
                 match rst {
                     Ok(size) => {
-                        info!("target stream receive {} bytes data.", size);
+                        //info!("target stream receive {} bytes data.", size);
                         if size == 0 {
                             break;
                         }
-                        let rst = stream_write.write_all(&buf[0..size]);
+                        let rst = stream_write.write_all(&encode(&buf[0..size]));
                         if rst.is_err() {
                             break;
                         }
@@ -374,7 +355,6 @@ impl Protocol {
                     }
                 }
             }
-            info!("server closed.");
             let _ = sx2.send(0);
         });
 

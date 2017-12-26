@@ -1,4 +1,4 @@
-use define::ErrCode;
+use define::{Ip, ErrCode};
 use define::ErrCode::*;
 
 use std::net::{Shutdown, TcpStream, Ipv4Addr};
@@ -18,30 +18,8 @@ use bytes::{BytesMut, BufMut};
 use std::sync::mpsc::{channel};
 
 use helper;
-
-#[derive(Default, Debug)]
-struct Ip {
-    first: u8,
-    second: u8,
-    third: u8,
-    forth: u8,
-}
-
-impl Ip {
-    
-    pub fn new(fs:u8, s:u8, t:u8, f:u8) -> Self {
-        Ip {
-            first:fs,
-            second:s,
-            third:t,
-            forth:f,
-        }
-    }
-
-    pub fn to_ipv4(&self) -> Ipv4Addr {
-        Ipv4Addr::new(self.first, self.second, self.third, self.forth)
-    }
-}
+use helper::encode;
+use server::cache::DnsCache;
 
 #[derive(Default, Debug)]
 struct ConnectHead {
@@ -93,11 +71,12 @@ pub struct Protocol {
     conn_head: ConnectHead,
     target_stream: Option<TcpStream>, //stream to the target
     time_out: u64,
+    cache: DnsCache,
 }
 
 impl Protocol {
     
-    pub fn new(stream:TcpStream, time_out:u64) -> Self {
+    pub fn new(stream:TcpStream, time_out:u64, cache:DnsCache) -> Self {
         let _ = stream.set_read_timeout(Some(Duration::from_millis(time_out)));
         Protocol {
             stream: stream,
@@ -106,6 +85,7 @@ impl Protocol {
             conn_head: Default::default(),
             target_stream: None,
             time_out: time_out,
+            cache: cache,
         }
     }
 
@@ -120,7 +100,7 @@ impl Protocol {
                         break;
                     }
                     self.buf.reserve(size);
-                    self.buf.extend_from_slice(&buf[0..size]);
+                    self.buf.extend_from_slice(&encode(&buf[0..size]));
                     let _ = self.handle()?;
                 },
                 Err(e) => {
@@ -213,12 +193,8 @@ impl Protocol {
         if atyp == 1 {
             ipv4_addr = self.conn_head.ip.to_ipv4();
         } else {
-            ipv4_addr = helper::get_ip_addr(&self.conn_head.url)?;
-            //info!("resolver the site to ip:{}", ipv4_addr);
-            //save the resolver ip to head
-            let parts = ipv4_addr.octets();
-            let ip = Ip::new(parts[0], parts[1], parts[2], parts[3]);
-            self.conn_head.ip = ip;
+            self.conn_head.ip = self.cache.get_ip(&self.conn_head.url)?;
+            ipv4_addr = self.conn_head.ip.to_ipv4();
         }
         info!("{}:{}:{} and buf len is {}.", self.conn_head.url, ipv4_addr, self.conn_head.port, self.buf.len());
         let time_out = Duration::from_secs(self.time_out);
@@ -230,7 +206,9 @@ impl Protocol {
     pub fn tunnel(&mut self) -> Result<(), ErrCode> {
         let (sx, rx) = channel::<u64>();
         let stream = self.stream.try_clone().or(Err(SocketErr))?;
-        let target_stream = self.target_stream.take().ok_or(SocketErr)?;
+        let mut target_stream = self.target_stream.take().ok_or(SocketErr)?;
+        //write the self.buf first
+        let _ = target_stream.write_all(&self.buf).or(Err(SocketErr))?;
 
         //write time out 1 minute
         let _ = stream.set_write_timeout(Some(Duration::from_millis(60*1000))).or(Err(SocketErr))?;
@@ -256,7 +234,7 @@ impl Protocol {
                         if size == 0 {
                             break;
                         }
-                        let rst = target_stream_write.write_all(&buf[0..size]);
+                        let rst = target_stream_write.write_all(&encode(&buf[0..size]));
                         if rst.is_err() {
                             break;
                         }
@@ -267,7 +245,6 @@ impl Protocol {
                     }
                 }
             }
-            info!("local closed.");
             let _ = sx1.send(0);
         });
 
@@ -284,7 +261,7 @@ impl Protocol {
                         if size == 0 {
                             break;
                         }
-                        let rst = stream_write.write_all(&buf[0..size]);
+                        let rst = stream_write.write_all(&encode(&buf[0..size]));
                         if rst.is_err() {
                             break;
                         }
@@ -295,7 +272,6 @@ impl Protocol {
                     }
                 }
             }
-            info!("target closed.");
             let _ = sx2.send(0);
         });
 
