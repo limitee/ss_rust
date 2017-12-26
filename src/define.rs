@@ -63,11 +63,6 @@ impl ErrCode {
     }
 }
 
-extern crate futures;
-use futures::Future;
-use std::io;
-pub type RunRst = Result<Box<Future<Item = (), Error = io::Error>>, ErrCode>;
-
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Ip {
     pub first: u8,

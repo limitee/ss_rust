@@ -1,7 +1,6 @@
-extern crate shadowsocks;
+extern crate ss_rust;
 #[macro_use]
 extern crate log;
-extern crate time;
 
 extern crate base_config;
 use base_config::CFG;
@@ -9,7 +8,7 @@ use base_config::CFG;
 extern crate base_log;
 use base_log::init_base_log;
 
-use shadowsocks::{ErrCode, local};
+use ss_rust::{ErrCode, local};
 use ErrCode::*;
 
 fn try_main() -> Result<(), ErrCode> {
