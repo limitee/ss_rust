@@ -14,5 +14,5 @@ extern crate bytes;
 extern crate byteorder;
 use byteorder::ReadBytesExt;
 
-extern crate trust_dns_resolver;
+extern crate dns_lookup;
 

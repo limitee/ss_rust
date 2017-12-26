@@ -21,7 +21,7 @@ serde_json = "1.0"
 bytes = "0.4"
 byteorder = "1.2"
 
-trust-dns-resolver = "^0.7"
+dns-lookup = "0.8"
 
 base_log = {git = "https://code.csdn.net/limite_god/base_log.git"}
 base_config = {git = "https://code.csdn.net/limite_god/base_config.git"}
