@@ -104,12 +104,14 @@ pub struct Protocol {
     start_head: StartHead,
     conn_head: ConnectHead,
     target_stream: Option<TcpStream>, //stream to the target
+    remote_ip: String,
+    remote_port: u32,
     time_out: u64,
 }
 
 impl Protocol {
     
-    pub fn new(stream:TcpStream, time_out:u64) -> Self {
+    pub fn new(stream:TcpStream, remote_ip:String, remote_port:u32, time_out:u64) -> Self {
         let _ = stream.set_read_timeout(Some(Duration::from_millis(time_out)));
         Protocol {
             stream: stream,
@@ -119,6 +121,8 @@ impl Protocol {
             conn_head: Default::default(),
             target_stream: None,
             time_out: time_out,
+            remote_ip: remote_ip,
+            remote_port: remote_port,
         }
     }
 
@@ -251,7 +255,8 @@ impl Protocol {
         self.target_stream = Some(TcpStream::connect((ipv4_addr, self.conn_head.port)).or(Err(NetErr))?);
         */
         let time_out = Duration::from_secs(self.time_out);
-        let addr = ("127.0.0.1", 8888).to_socket_addrs().or(Err(NetErr))?.next().ok_or(NetErr)?;
+        let uri = format!("{}:{}", self.remote_ip, self.remote_port);
+        let addr = uri.parse().or(Err(NetErr))?;
 
         let target_stream = TcpStream::connect_timeout(&addr, time_out).or(Err(NetErr))?;
         self.target_stream = Some(target_stream);
