@@ -288,8 +288,11 @@ impl Protocol {
         Ok(())
     }
     
-    ///no used yet
+    ///can not connect the target, clear the site cache
     pub fn connect_err(&mut self) -> Result<(), ErrCode> {
+        if self.conn_head.url.len() > 0 {
+            self.cache.remove(&self.conn_head.url)?;
+        }
         Ok(())
     }
 

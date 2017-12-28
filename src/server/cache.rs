@@ -47,4 +47,10 @@ impl DnsCache {
             Ok(ip)
         }
     }
+
+    pub fn remove(&mut self, url:&str) -> Result<(), ErrCode> {
+        let mut map = self.inner.map.write().or(Err(LockErr))?;
+        let _ = map.remove(url);
+        Ok(())
+    }
 }
